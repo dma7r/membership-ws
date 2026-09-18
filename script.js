@@ -7,6 +7,22 @@ const SUPABASE_ANON_KEY = "sb_publishable_bUL-eM8mbA8fgFYoUpXVFg_DTWaUKdf";
 
 let supabaseClient = null;
 
+// DOM Elements (initialized in DOMContentLoaded)
+let appContainer = null;
+let landingView = null;
+let attendanceView = null;
+let phoneInput = null;
+let searchButton = null;
+let backButton = null;
+let resultsContainer = null;
+let loadingSpinner = null;
+let emptyState = null;
+let searchError = null;
+let studentHeader = null;
+let attendanceSection = null;
+let detailLoading = null;
+let detailError = null;
+
 /**
  * Initialize Supabase Client
  */
@@ -17,28 +33,48 @@ function initSupabase() {
         return false;
     }
     
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    return true;
+    try {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        return true;
+    } catch (err) {
+        console.error('Supabase initialization failed:', err);
+        showError('Initialization Error', 'Failed to initialize Supabase client.');
+        return false;
+    }
 }
 
-/* ============================================================================
-   DOM Elements
-   ============================================================================ */
-
-const appContainer = document.getElementById('app-container');
-const landingView = document.getElementById('landing-view');
-const attendanceView = document.getElementById('attendance-view');
-const phoneInput = document.getElementById('phone-input');
-const searchButton = document.getElementById('search-button');
-const backButton = document.getElementById('back-button');
-const resultsContainer = document.getElementById('results-container');
-const loadingSpinner = document.getElementById('loading-spinner');
-const emptyState = document.getElementById('empty-state');
-const searchError = document.getElementById('search-error');
-const studentHeader = document.getElementById('student-header');
-const attendanceSection = document.getElementById('attendance-section');
-const detailLoading = document.getElementById('detail-loading');
-const detailError = document.getElementById('detail-error');
+/**
+ * Cache all DOM elements after page load
+ */
+function cacheDOM() {
+    appContainer = document.getElementById('app-container');
+    landingView = document.getElementById('landing-view');
+    attendanceView = document.getElementById('attendance-view');
+    phoneInput = document.getElementById('phone-input');
+    searchButton = document.getElementById('search-button');
+    backButton = document.getElementById('back-button');
+    resultsContainer = document.getElementById('results-container');
+    loadingSpinner = document.getElementById('loading-spinner');
+    emptyState = document.getElementById('empty-state');
+    searchError = document.getElementById('search-error');
+    studentHeader = document.getElementById('student-header');
+    attendanceSection = document.getElementById('attendance-section');
+    detailLoading = document.getElementById('detail-loading');
+    detailError = document.getElementById('detail-error');
+    
+    // Verify critical elements exist
+    if (!phoneInput || !searchButton || !landingView || !attendanceView) {
+        console.error('Critical DOM elements missing:', {
+            phoneInput: !!phoneInput,
+            searchButton: !!searchButton,
+            landingView: !!landingView,
+            attendanceView: !!attendanceView
+        });
+        return false;
+    }
+    
+    return true;
+}
 
 /* ============================================================================
    View Management
@@ -48,6 +84,11 @@ const detailError = document.getElementById('detail-error');
  * Switch between landing and attendance views
  */
 function switchView(viewName) {
+    if (!landingView || !attendanceView) {
+        console.error('View elements not found');
+        return;
+    }
+    
     landingView.classList.remove('active');
     attendanceView.classList.remove('active');
     
@@ -64,6 +105,12 @@ function switchView(viewName) {
  */
 function setLoading(isLoading, target = 'landing') {
     const spinner = target === 'landing' ? loadingSpinner : detailLoading;
+    
+    if (!spinner) {
+        console.warn(`Loading spinner not found for target: ${target}`);
+        return;
+    }
+    
     if (isLoading) {
         spinner.classList.remove('hidden');
     } else {
@@ -123,6 +170,11 @@ async function searchStudentsByPhone(phoneNumber) {
  * Render search results as student cards
  */
 function renderSearchResults(students) {
+    if (!resultsContainer || !emptyState) {
+        console.error('Results container or empty state not found');
+        return;
+    }
+    
     resultsContainer.innerHTML = '';
     
     if (!students || students.length === 0) {
@@ -176,14 +228,13 @@ function renderSearchResults(students) {
             </div>
             
             <div class="student-card-footer">
-                <md-filled-button class="view-attendance-btn" data-student-id="${escapeHtml(student.student_id)}">
-                    <md-icon slot="icon">school</md-icon>
+                <button class="view-attendance-btn" data-student-id="${escapeHtml(student.student_id)}" style="flex: 1; padding: 10px; background-color: var(--md-primary); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-family: 'Roboto', sans-serif;">
                     View Attendance
-                </md-filled-button>
+                </button>
                 ${student.wa_link ? `
-                    <md-text-button onclick="window.open('${escapeHtml(student.wa_link)}', '_blank')">
-                        <md-icon slot="icon">chat</md-icon>
-                    </md-text-button>
+                    <button onclick="window.open('${escapeHtml(student.wa_link)}', '_blank')" style="padding: 10px 16px; background-color: transparent; border: 1px solid var(--md-outline-variant); border-radius: 8px; cursor: pointer; font-family: 'Roboto', sans-serif;">
+                        💬
+                    </button>
                 ` : ''}
             </div>
         `;
@@ -202,8 +253,15 @@ function renderSearchResults(students) {
  * Handle search button click
  */
 async function handleSearch() {
+    // Defensive check: verify phoneInput exists
+    if (!phoneInput) {
+        console.error('Phone input element not found');
+        showErrorMessage('UI Error: Please reload the page');
+        return;
+    }
+    
     clearErrorMessage();
-    const phoneNumber = phoneInput.value.trim();
+    const phoneNumber = phoneInput.value ? phoneInput.value.trim() : '';
     
     if (!phoneNumber) {
         showErrorMessage('Please enter a phone number');
@@ -250,10 +308,20 @@ function navigateToAttendance(studentId) {
  */
 function handleBackToSearch() {
     switchView('landing');
-    phoneInput.value = '';
-    resultsContainer.innerHTML = '';
-    resultsContainer.classList.add('hidden');
-    emptyState.classList.add('hidden');
+    
+    if (phoneInput) {
+        phoneInput.value = '';
+    }
+    
+    if (resultsContainer) {
+        resultsContainer.innerHTML = '';
+        resultsContainer.classList.add('hidden');
+    }
+    
+    if (emptyState) {
+        emptyState.classList.add('hidden');
+    }
+    
     clearErrorMessage();
 }
 
@@ -307,6 +375,11 @@ async function fetchAttendanceRecords(studentId) {
  * Render student header banner
  */
 function renderStudentHeader(student) {
+    if (!studentHeader) {
+        console.error('Student header element not found');
+        return;
+    }
+    
     if (!student) {
         studentHeader.innerHTML = '<p class="error-message">Student information not found.</p>';
         return;
@@ -348,10 +421,9 @@ function renderStudentHeader(student) {
         
         <div class="header-actions">
             ${student.wa_link ? `
-                <md-filled-button onclick="window.open('${escapeHtml(student.wa_link)}', '_blank')">
-                    <md-icon slot="icon">chat</md-icon>
-                    WhatsApp Support
-                </md-filled-button>
+                <button onclick="window.open('${escapeHtml(student.wa_link)}', '_blank')" style="padding: 12px 24px; background-color: var(--md-primary); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-family: 'Roboto', sans-serif;">
+                    💬 WhatsApp Support
+                </button>
             ` : ''}
         </div>
     `;
@@ -361,12 +433,17 @@ function renderStudentHeader(student) {
  * Render attendance records
  */
 function renderAttendanceRecords(records) {
+    if (!attendanceSection) {
+        console.error('Attendance section not found');
+        return;
+    }
+    
     attendanceSection.innerHTML = '';
     
     if (!records || records.length === 0) {
         attendanceSection.innerHTML = `
             <div class="empty-state" style="min-height: 200px;">
-                <md-icon class="empty-state-icon">event_busy</md-icon>
+                <div class="empty-state-icon">📅</div>
                 <h3>No Attendance Records</h3>
                 <p>No attendance records found for this student.</p>
             </div>
@@ -572,7 +649,7 @@ function escapeHtml(text) {
 }
 
 /**
- * Show error dialog (optional)
+ * Show error dialog
  */
 function showError(title, message) {
     const errorDiv = document.createElement('div');
@@ -581,41 +658,68 @@ function showError(title, message) {
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        background: white;
+        background: var(--md-surface);
         padding: 24px;
         border-radius: 12px;
         box-shadow: 0 10px 40px rgba(0,0,0,0.3);
         z-index: 1000;
         max-width: 400px;
         text-align: center;
+        border: 1px solid var(--md-error-container);
     `;
     errorDiv.innerHTML = `
-        <h2 style="margin: 0 0 12px 0; color: #b3261e;">${title}</h2>
-        <p style="margin: 0; color: #666;">${message}</p>
+        <h2 style="margin: 0 0 12px 0; color: var(--md-error); font-size: 20px;">${escapeHtml(title)}</h2>
+        <p style="margin: 0; color: var(--md-on-surface-variant); font-size: 14px;">${escapeHtml(message)}</p>
+        <button onclick="this.parentElement.remove()" style="margin-top: 16px; padding: 8px 16px; background-color: var(--md-primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-family: 'Roboto', sans-serif; font-weight: 600;">Dismiss</button>
     `;
     document.body.appendChild(errorDiv);
 }
 
 /* ============================================================================
-   Event Listeners
+   Event Listeners & Initialization
    ============================================================================ */
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize Supabase
-    if (!initSupabase()) {
+    console.log('DOM Content Loaded - Initializing app...');
+    
+    // Step 1: Cache all DOM elements
+    if (!cacheDOM()) {
+        console.error('Failed to cache critical DOM elements');
+        showError('Initialization Error', 'Failed to load page elements. Please reload.');
         return;
     }
+    console.log('✓ DOM elements cached successfully');
     
-    // Attach event listeners
-    searchButton.addEventListener('click', handleSearch);
-    phoneInput.addEventListener('keydown', handlePhoneKeydown);
-    backButton.addEventListener('click', handleBackToSearch);
+    // Step 2: Initialize Supabase
+    if (!initSupabase()) {
+        console.error('Failed to initialize Supabase');
+        return;
+    }
+    console.log('✓ Supabase initialized');
     
-    // Check for URL parameters
+    // Step 3: Attach event listeners (safe now that DOM is ready)
+    if (searchButton) {
+        searchButton.addEventListener('click', handleSearch);
+        console.log('✓ Search button listener attached');
+    }
+    
+    if (phoneInput) {
+        phoneInput.addEventListener('keydown', handlePhoneKeydown);
+        console.log('✓ Phone input listener attached');
+    }
+    
+    if (backButton) {
+        backButton.addEventListener('click', handleBackToSearch);
+        console.log('✓ Back button listener attached');
+    }
+    
+    // Step 4: Check for URL parameters (e.g., ?id=STUDENT_ID)
     checkUrlParams();
+    console.log('✓ App initialization complete');
 });
 
-// Handle browser back button
+// Step 5: Handle browser back button
 window.addEventListener('popstate', () => {
+    console.log('Browser back button pressed');
     checkUrlParams();
 });
