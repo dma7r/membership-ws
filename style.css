@@ -240,16 +240,70 @@ body {
     display: flex;
     gap: var(--spacing-md);
     flex-wrap: wrap;
-    align-items: flex-end;
+    align-items: center;
 }
 
-#phone-input {
+#phone-input,
+.phone-input-field {
     flex: 1;
     min-width: 250px;
+    padding: 12px 16px;
+    font-size: var(--font-size-base);
+    border: 1px solid var(--md-outline);
+    border-radius: var(--radius-md);
+    background-color: var(--md-surface-container-low);
+    color: var(--md-on-surface);
+    font-family: var(--font-family);
+    transition: all 0.2s ease;
 }
 
-.search-button {
-    height: 56px;
+#phone-input:focus,
+.phone-input-field:focus {
+    outline: none;
+    border-color: var(--md-primary);
+    box-shadow: 0 0 0 3px rgba(103, 80, 164, 0.1);
+}
+
+#phone-input::placeholder,
+.phone-input-field::placeholder {
+    color: var(--md-on-surface-variant);
+}
+
+.search-button,
+#search-button {
+    height: 48px;
+    padding: 12px 24px;
+    background-color: var(--md-primary);
+    color: var(--md-on-primary);
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--font-family);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.search-button:hover,
+#search-button:hover {
+    background-color: #5a4593;
+    box-shadow: var(--shadow-md);
+}
+
+.search-button:active,
+#search-button:active {
+    transform: scale(0.98);
+}
+
+.search-button:disabled,
+#search-button:disabled {
+    background-color: var(--md-outline-variant);
+    color: var(--md-on-surface-variant);
+    cursor: not-allowed;
 }
 
 .error-message {
@@ -386,6 +440,22 @@ body {
     font-size: var(--font-size-sm);
 }
 
+/* Spinner Animation */
+.spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--md-outline-variant);
+    border-top-color: var(--md-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 /* Empty State */
 .empty-state {
     display: flex;
@@ -407,7 +477,9 @@ body {
     font-size: 64px;
     width: 64px;
     height: 64px;
-    color: var(--md-outline-variant);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .empty-state h3 {
@@ -425,8 +497,33 @@ body {
    Attendance Detail View
    ============================================================================ */
 
-.back-button {
+.back-button,
+#back-button {
     margin-bottom: var(--spacing-lg);
+    padding: 8px 16px;
+    background-color: transparent;
+    color: var(--md-primary);
+    border: 1px solid var(--md-outline-variant);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    cursor: pointer;
+    font-family: var(--font-family);
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.back-button:hover,
+#back-button:hover {
+    background-color: var(--md-primary-container);
+    border-color: var(--md-primary);
+}
+
+.back-button:active,
+#back-button:active {
+    transform: scale(0.98);
 }
 
 .student-header {
@@ -743,41 +840,15 @@ body {
 }
 
 /* ============================================================================
-   Material Web Components Customization
+   Standard HTML Button & Input Customization
    ============================================================================ */
 
-md-filled-button,
-md-text-button,
-md-outlined-text-field {
-    --md-theme-primary: var(--md-primary);
-    --md-theme-error: var(--md-error);
+button {
+    cursor: pointer;
+    font-family: var(--font-family);
 }
 
-md-circular-progress {
-    --md-circular-progress-active-indicator-color: var(--md-primary);
-}
-
-md-icon {
-    font-size: 24px;
-}
-
-/* Override Material Web button styling for consistency */
-md-filled-button {
-    text-transform: none;
-    letter-spacing: normal;
-    font-weight: 600;
-}
-
-md-text-button {
-    text-transform: none;
-    letter-spacing: normal;
-    color: var(--md-primary);
-}
-
-md-outlined-text-field {
-    width: 100%;
-}
-
-md-outlined-text-field::part(field) {
-    border-radius: var(--radius-md);
+input[type="tel"],
+input[type="text"] {
+    font-family: var(--font-family);
 }
