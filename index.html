@@ -1,21 +1,120 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <title>Cek Status Membership - Sparks Sports Academy</title>
-
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-
-  <link rel="icon" href="data:;base64,iVBORw0KGgo=">
-  <link rel="stylesheet" href="style.css" />
-
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sparks Sports Academy - Student Portal</title>
+    
+    <!-- Material Design 3 Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Material Web Components CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@material/web/all.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/@material/web/all.css" rel="stylesheet">
+    
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main id="app"></main>
-  <script src="script.js" defer></script>
+    <!-- Main App Container -->
+    <div id="app-container" class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo-section">
+                    <img src="logo.png" alt="Sparks Sports Academy Logo" class="logo" onerror="this.style.display='none'">
+                    <div>
+                        <h1 class="app-title">Sparks Sports Academy</h1>
+                        <p class="app-subtitle">Student Portal</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Landing / Search View -->
+            <div id="landing-view" class="view active">
+                <div class="search-container">
+                    <h2>Find Your Child's Membership & Attendance</h2>
+                    <p class="search-description">Enter your phone number to get started</p>
+                    
+                    <div class="search-box">
+                        <md-outlined-text-field
+                            id="phone-input"
+                            label="Phone Number"
+                            type="tel"
+                            placeholder="e.g., +62 812 3456 7890"
+                            @keydown="handlePhoneKeydown"
+                        ></md-outlined-text-field>
+                        <md-filled-button
+                            id="search-button"
+                            @click="handleSearch"
+                            class="search-button"
+                        >
+                            <md-icon slot="icon">search</md-icon>
+                            Search
+                        </md-filled-button>
+                    </div>
+                    <div id="search-error" class="error-message"></div>
+                </div>
+
+                <!-- Loading State -->
+                <div id="loading-spinner" class="loading-spinner hidden">
+                    <md-circular-progress indeterminate></md-circular-progress>
+                    <p>Searching for students...</p>
+                </div>
+
+                <!-- Results Container -->
+                <div id="results-container" class="results-container"></div>
+
+                <!-- Empty State -->
+                <div id="empty-state" class="empty-state hidden">
+                    <md-icon class="empty-state-icon">person_search</md-icon>
+                    <h3>No Results Found</h3>
+                    <p>Please check your phone number and try again.</p>
+                </div>
+            </div>
+
+            <!-- Attendance Detail View -->
+            <div id="attendance-view" class="view">
+                <!-- Back Button -->
+                <md-text-button
+                    id="back-button"
+                    @click="handleBackToSearch"
+                    class="back-button"
+                >
+                    <md-icon slot="icon">arrow_back</md-icon>
+                    Back to Search
+                </md-text-button>
+
+                <!-- Loading State for Detail -->
+                <div id="detail-loading" class="loading-spinner hidden">
+                    <md-circular-progress indeterminate></md-circular-progress>
+                    <p>Loading attendance details...</p>
+                </div>
+
+                <!-- Student Info Header -->
+                <div id="student-header" class="student-header"></div>
+
+                <!-- Attendance Section -->
+                <div id="attendance-section" class="attendance-section"></div>
+
+                <!-- Detail Error State -->
+                <div id="detail-error" class="error-message"></div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>&copy; 2024 Sparks Sports Academy. All rights reserved.</p>
+        </footer>
+    </div>
+
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- App Script -->
+    <script src="script.js"></script>
 </body>
 </html>
