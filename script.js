@@ -1,612 +1,621 @@
-// ==========================================
-// 1. SUPABASE CONFIGURATION
-// ==========================================
+/* ============================================================================
+   Supabase Configuration
+   ============================================================================ */
+
 const SUPABASE_URL = "https://cfdjsilmcomflleqhqii.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bUL-eM8mbA8fgFYoUpXVFg_DTWaUKdf";
 
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let supabaseClient = null;
 
-const LOGO_URL      = "logo.png";
-const SUPPORT_WA    = "https://wa.me/6281390006606";
-const SUPPORT_LABEL = "Tim Customer Support Sparks Sports";
-
-const app = document.getElementById("app");
-
-let ALL_STUDENTS   = [];
-let ALL_ATTENDANCE = [];
-let DATA_READY     = false;
-let DATA_ERROR     = "";
-
-// ============================================================
-// ICONS
-// ============================================================
-
-const ICON_PHONE  = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v2.2a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 3.4 2 2 0 0 1 4.11 1.2h2.2a2 2 0 0 1 2 1.72c.13.96.35 1.9.66 2.8a2 2 0 0 1-.45 2.1L7.6 8.75a16 16 0 0 0 7.65 7.65l.93-.93a2 2 0 0 1 2.1-.45c.9.31 1.84.53 2.8.66A2 2 0 0 1 22 16.92Z"/></svg>`;
-const ICON_SEARCH = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>`;
-const ICON_WA     = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>`;
-
-// ============================================================
-// INIT
-// ============================================================
-
-document.addEventListener("DOMContentLoaded", async () => {
-  const params    = new URLSearchParams(window.location.search);
-  const phone     = params.get("phone");
-  const studentId = params.get("sid");
-
-  // LP3: student detail
-  if (studentId) {
-    renderLoadingPage("Memuat detail attendance", "Mohon tunggu sebentar.");
-    await loadStudentById(studentId);
-    if (DATA_ERROR) { renderErrorPage(DATA_ERROR); return; }
+/**
+ * Initialize Supabase Client
+ */
+function initSupabase() {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('YOUR_')) {
+        console.error('Supabase credentials not configured. Please update SUPABASE_URL and SUPABASE_ANON_KEY.');
+        showError('Configuration Error', 'Supabase credentials are not set up. Please contact support.');
+        return false;
+    }
     
-    if (!ALL_STUDENTS.length) { renderNotFoundPage(phone || studentId); return; }
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    return true;
+}
 
-    const student = ALL_STUDENTS[0];
-    await fetchAttendanceForStudent(studentId);
+/* ============================================================================
+   DOM Elements
+   ============================================================================ */
 
-    renderDetailPage(student, ALL_ATTENDANCE, student.waLink, student.sarName, phone);
-    return;
-  }
+const appContainer = document.getElementById('app-container');
+const landingView = document.getElementById('landing-view');
+const attendanceView = document.getElementById('attendance-view');
+const phoneInput = document.getElementById('phone-input');
+const searchButton = document.getElementById('search-button');
+const backButton = document.getElementById('back-button');
+const resultsContainer = document.getElementById('results-container');
+const loadingSpinner = document.getElementById('loading-spinner');
+const emptyState = document.getElementById('empty-state');
+const searchError = document.getElementById('search-error');
+const studentHeader = document.getElementById('student-header');
+const attendanceSection = document.getElementById('attendance-section');
+const detailLoading = document.getElementById('detail-loading');
+const detailError = document.getElementById('detail-error');
 
-  // LP2: dashboard
-  if (phone) {
-    renderLoadingPage("Mencari data membership", "Mohon tunggu sebentar. Kami sedang mencocokkan nomor WhatsApp yang kamu masukkan.");
-    await loadStudentsByPhone(phone);
-    if (DATA_ERROR) { renderErrorPage(DATA_ERROR); return; }
+/* ============================================================================
+   View Management
+   ============================================================================ */
+
+/**
+ * Switch between landing and attendance views
+ */
+function switchView(viewName) {
+    landingView.classList.remove('active');
+    attendanceView.classList.remove('active');
     
-    if (!ALL_STUDENTS.length) { renderNotFoundPage(phone); return; }
-    renderDashboardPage(ALL_STUDENTS);
-    return;
-  }
+    if (viewName === 'landing') {
+        landingView.classList.add('active');
+        window.history.replaceState(null, '', window.location.pathname);
+    } else if (viewName === 'attendance') {
+        attendanceView.classList.add('active');
+    }
+}
 
-  // LP1: landing
-  renderLandingPage();
+/**
+ * Show/hide loading spinner
+ */
+function setLoading(isLoading, target = 'landing') {
+    const spinner = target === 'landing' ? loadingSpinner : detailLoading;
+    if (isLoading) {
+        spinner.classList.remove('hidden');
+    } else {
+        spinner.classList.add('hidden');
+    }
+}
+
+/**
+ * Show error message
+ */
+function showErrorMessage(message, target = 'landing') {
+    const errorEl = target === 'landing' ? searchError : detailError;
+    errorEl.textContent = message;
+    errorEl.classList.add('show');
+    setTimeout(() => errorEl.classList.remove('show'), 5000);
+}
+
+/**
+ * Clear error message
+ */
+function clearErrorMessage(target = 'landing') {
+    const errorEl = target === 'landing' ? searchError : detailError;
+    errorEl.textContent = '';
+    errorEl.classList.remove('show');
+}
+
+/* ============================================================================
+   Phone Search & Student Lookup
+   ============================================================================ */
+
+/**
+ * Fetch students by phone number
+ */
+async function searchStudentsByPhone(phoneNumber) {
+    if (!supabaseClient) return null;
+    
+    try {
+        const { data, error } = await supabaseClient.rpc('get_students_by_phone', {
+            search_phone: phoneNumber
+        });
+        
+        if (error) {
+            console.error('RPC Error:', error);
+            showErrorMessage(`Error: ${error.message}`);
+            return null;
+        }
+        
+        return data || [];
+    } catch (err) {
+        console.error('Search Error:', err);
+        showErrorMessage('Failed to search students. Please try again.');
+        return null;
+    }
+}
+
+/**
+ * Render search results as student cards
+ */
+function renderSearchResults(students) {
+    resultsContainer.innerHTML = '';
+    
+    if (!students || students.length === 0) {
+        resultsContainer.classList.add('hidden');
+        emptyState.classList.remove('hidden');
+        return;
+    }
+    
+    resultsContainer.classList.remove('hidden');
+    emptyState.classList.add('hidden');
+    
+    students.forEach(student => {
+        const expiryDate = new Date(student.expiry_date_raw);
+        const today = new Date();
+        const isExpired = expiryDate < today;
+        const isExpiringSoon = !isExpired && (expiryDate - today) < (30 * 24 * 60 * 60 * 1000);
+        
+        const statusClass = isExpired ? 'expired' : isExpiringSoon ? 'expiring' : 'active';
+        const statusText = isExpired ? 'Membership Expired' : isExpiringSoon ? 'Expiring Soon' : 'Active';
+        
+        const formattedDate = expiryDate.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+        
+        const card = document.createElement('div');
+        card.className = 'student-card';
+        card.innerHTML = `
+            <div class="student-card-header">
+                <div>
+                    <h3 class="student-name">${escapeHtml(student.student_name)}</h3>
+                    <p class="student-id">ID: ${escapeHtml(student.student_id)}</p>
+                </div>
+                <span class="status-badge ${statusClass}">${statusText}</span>
+            </div>
+            
+            <div class="student-details">
+                <div class="detail-row">
+                    <span class="detail-label">Center</span>
+                    <span class="detail-value">${escapeHtml(student.center)}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Parent Name</span>
+                    <span class="detail-value">${escapeHtml(student.parents_name)}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Membership Expiry</span>
+                    <span class="detail-value">${formattedDate}</span>
+                </div>
+            </div>
+            
+            <div class="student-card-footer">
+                <md-filled-button class="view-attendance-btn" data-student-id="${escapeHtml(student.student_id)}">
+                    <md-icon slot="icon">school</md-icon>
+                    View Attendance
+                </md-filled-button>
+                ${student.wa_link ? `
+                    <md-text-button onclick="window.open('${escapeHtml(student.wa_link)}', '_blank')">
+                        <md-icon slot="icon">chat</md-icon>
+                    </md-text-button>
+                ` : ''}
+            </div>
+        `;
+        
+        resultsContainer.appendChild(card);
+        
+        // Add event listener to View Attendance button
+        card.querySelector('.view-attendance-btn').addEventListener('click', (e) => {
+            const studentId = e.currentTarget.getAttribute('data-student-id');
+            navigateToAttendance(studentId);
+        });
+    });
+}
+
+/**
+ * Handle search button click
+ */
+async function handleSearch() {
+    clearErrorMessage();
+    const phoneNumber = phoneInput.value.trim();
+    
+    if (!phoneNumber) {
+        showErrorMessage('Please enter a phone number');
+        return;
+    }
+    
+    setLoading(true);
+    resultsContainer.classList.add('hidden');
+    emptyState.classList.add('hidden');
+    
+    const students = await searchStudentsByPhone(phoneNumber);
+    setLoading(false);
+    
+    if (students !== null) {
+        renderSearchResults(students);
+    }
+}
+
+/**
+ * Handle phone input keydown (Enter to search)
+ */
+function handlePhoneKeydown(event) {
+    if (event.key === 'Enter') {
+        handleSearch();
+    }
+}
+
+/* ============================================================================
+   Attendance Detail View
+   ============================================================================ */
+
+/**
+ * Navigate to attendance detail page
+ */
+function navigateToAttendance(studentId) {
+    window.history.pushState(null, '', `?id=${encodeURIComponent(studentId)}`);
+    switchView('attendance');
+    clearErrorMessage('attendance');
+    loadAttendanceDetail(studentId);
+}
+
+/**
+ * Handle back to search button
+ */
+function handleBackToSearch() {
+    switchView('landing');
+    phoneInput.value = '';
+    resultsContainer.innerHTML = '';
+    resultsContainer.classList.add('hidden');
+    emptyState.classList.add('hidden');
+    clearErrorMessage();
+}
+
+/**
+ * Fetch student info by ID
+ */
+async function fetchStudentInfo(studentId) {
+    if (!supabaseClient) return null;
+    
+    try {
+        const { data, error } = await supabaseClient.rpc('get_student_by_id', {
+            search_id: studentId
+        });
+        
+        if (error) {
+            console.error('RPC Error:', error);
+            return null;
+        }
+        
+        return data && data.length > 0 ? data[0] : null;
+    } catch (err) {
+        console.error('Fetch Error:', err);
+        return null;
+    }
+}
+
+/**
+ * Fetch attendance records by student ID
+ */
+async function fetchAttendanceRecords(studentId) {
+    if (!supabaseClient) return null;
+    
+    try {
+        const { data, error } = await supabaseClient.rpc('get_attendance_by_student_id', {
+            search_id: studentId
+        });
+        
+        if (error) {
+            console.error('RPC Error:', error);
+            return null;
+        }
+        
+        return data || [];
+    } catch (err) {
+        console.error('Fetch Error:', err);
+        return null;
+    }
+}
+
+/**
+ * Render student header banner
+ */
+function renderStudentHeader(student) {
+    if (!student) {
+        studentHeader.innerHTML = '<p class="error-message">Student information not found.</p>';
+        return;
+    }
+    
+    const expiryDate = new Date(student.expiry_date_raw);
+    const today = new Date();
+    const isExpired = expiryDate < today;
+    const statusClass = isExpired ? 'expired' : 'active';
+    const statusText = isExpired ? 'Membership Expired' : 'Membership Active';
+    
+    const formattedDate = expiryDate.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+    
+    studentHeader.innerHTML = `
+        <div class="header-top">
+            <div>
+                <h2 class="student-name-header">${escapeHtml(student.student_name)}</h2>
+                <p style="margin: 4px 0 0 0; color: var(--md-on-surface-variant); font-size: 14px;">
+                    Student ID: ${escapeHtml(student.student_id)}
+                </p>
+            </div>
+            <span class="status-badge ${statusClass}" style="margin-top: 4px;">${statusText}</span>
+        </div>
+        
+        <div class="header-meta">
+            <div class="meta-item">
+                <span class="meta-label">Center</span>
+                <span class="meta-value">${escapeHtml(student.center)}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Membership Expiry</span>
+                <span class="meta-value">${formattedDate}</span>
+            </div>
+        </div>
+        
+        <div class="header-actions">
+            ${student.wa_link ? `
+                <md-filled-button onclick="window.open('${escapeHtml(student.wa_link)}', '_blank')">
+                    <md-icon slot="icon">chat</md-icon>
+                    WhatsApp Support
+                </md-filled-button>
+            ` : ''}
+        </div>
+    `;
+}
+
+/**
+ * Render attendance records
+ */
+function renderAttendanceRecords(records) {
+    attendanceSection.innerHTML = '';
+    
+    if (!records || records.length === 0) {
+        attendanceSection.innerHTML = `
+            <div class="empty-state" style="min-height: 200px;">
+                <md-icon class="empty-state-icon">event_busy</md-icon>
+                <h3>No Attendance Records</h3>
+                <p>No attendance records found for this student.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Sort records by date (most recent first)
+    const sortedRecords = [...records].sort((a, b) => {
+        return new Date(b.raw_date) - new Date(a.raw_date);
+    });
+    
+    // Desktop Table View
+    const tableHtml = `
+        <h3 class="section-title">Attendance History</h3>
+        <div class="attendance-table-wrapper">
+            <table class="attendance-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Class</th>
+                        <th>Status</th>
+                        <th>Term/Quarter</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${sortedRecords.map(record => renderTableRow(record)).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    // Mobile Card View
+    const cardsHtml = `
+        <h3 class="section-title">Attendance History</h3>
+        <div class="attendance-cards">
+            ${sortedRecords.map(record => renderAttendanceCard(record)).join('')}
+        </div>
+    `;
+    
+    attendanceSection.innerHTML = tableHtml + cardsHtml;
+}
+
+/**
+ * Render a table row for attendance record
+ */
+function renderTableRow(record) {
+    const date = new Date(record.raw_date).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+    });
+    
+    const statusClass = getStatusClass(record.attendance);
+    const statusText = formatAttendanceStatus(record.attendance);
+    const notes = buildNotes(record);
+    
+    return `
+        <tr>
+            <td><span class="attendance-date">${date}</span></td>
+            <td>${escapeHtml(record.class_ || '-')}</td>
+            <td><span class="attendance-status ${statusClass}">${statusText}</span></td>
+            <td>${escapeHtml(record.term ? `${record.term} ${record.quarter || ''}` : '-')}</td>
+            <td>${notes ? `<em>${escapeHtml(notes)}</em>` : '-'}</td>
+        </tr>
+    `;
+}
+
+/**
+ * Render an attendance card for mobile view
+ */
+function renderAttendanceCard(record) {
+    const date = new Date(record.raw_date).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        weekday: 'short'
+    });
+    
+    const statusClass = getStatusClass(record.attendance);
+    const statusText = formatAttendanceStatus(record.attendance);
+    const notes = buildNotes(record);
+    
+    return `
+        <div class="attendance-card ${statusClass}">
+            <div class="card-date">${date}</div>
+            <div class="card-row">
+                <span class="card-label">Class:</span>
+                <span class="card-value">${escapeHtml(record.class_ || '-')}</span>
+            </div>
+            <div class="card-row">
+                <span class="card-label">Status:</span>
+                <span class="attendance-status ${statusClass}">${statusText}</span>
+            </div>
+            ${record.term ? `
+                <div class="card-row">
+                    <span class="card-label">Term:</span>
+                    <span class="card-value">${escapeHtml(record.term)} ${escapeHtml(record.quarter || '')}</span>
+                </div>
+            ` : ''}
+            ${notes ? `<div class="attendance-notes">${escapeHtml(notes)}</div>` : ''}
+        </div>
+    `;
+}
+
+/**
+ * Get status class for attendance
+ */
+function getStatusClass(attendance) {
+    if (!attendance) return 'absent';
+    if (attendance.toLowerCase() === 'present') return 'present';
+    if (attendance.toLowerCase() === 'makeup') return 'makeup';
+    return 'absent';
+}
+
+/**
+ * Format attendance status for display
+ */
+function formatAttendanceStatus(attendance) {
+    if (!attendance) return 'Absent';
+    if (attendance.toLowerCase() === 'present') return 'Present';
+    if (attendance.toLowerCase() === 'makeup') return 'Make-up';
+    return attendance;
+}
+
+/**
+ * Build notes from makeup_reason and previous_class
+ */
+function buildNotes(record) {
+    const notes = [];
+    if (record.makeup_reason) notes.push(`Makeup: ${record.makeup_reason}`);
+    if (record.previous_class) notes.push(`Previous Class: ${record.previous_class} (${record.previous_date_str})`);
+    return notes.join(' | ');
+}
+
+/**
+ * Load and render attendance detail page
+ */
+async function loadAttendanceDetail(studentId) {
+    if (!studentId) {
+        switchView('landing');
+        showErrorMessage('Invalid student ID');
+        return;
+    }
+    
+    setLoading(true, 'attendance');
+    clearErrorMessage('attendance');
+    
+    try {
+        const [studentInfo, attendanceRecords] = await Promise.all([
+            fetchStudentInfo(studentId),
+            fetchAttendanceRecords(studentId)
+        ]);
+        
+        setLoading(false, 'attendance');
+        
+        if (!studentInfo) {
+            showErrorMessage('Student not found. Please search again.', 'attendance');
+            setTimeout(() => handleBackToSearch(), 2000);
+            return;
+        }
+        
+        renderStudentHeader(studentInfo);
+        renderAttendanceRecords(attendanceRecords);
+        
+    } catch (err) {
+        setLoading(false, 'attendance');
+        console.error('Load Error:', err);
+        showErrorMessage('Failed to load attendance details. Please try again.', 'attendance');
+    }
+}
+
+/* ============================================================================
+   URL Parameter Handling
+   ============================================================================ */
+
+/**
+ * Check URL parameters on page load
+ */
+function checkUrlParams() {
+    const params = new URLSearchParams(window.location.search);
+    const studentId = params.get('id');
+    
+    if (studentId) {
+        switchView('attendance');
+        loadAttendanceDetail(studentId);
+    }
+}
+
+/* ============================================================================
+   Utility Functions
+   ============================================================================ */
+
+/**
+ * Escape HTML special characters
+ */
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+/**
+ * Show error dialog (optional)
+ */
+function showError(title, message) {
+    const errorDiv = document.createElement('div');
+    errorDiv.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 24px;
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        z-index: 1000;
+        max-width: 400px;
+        text-align: center;
+    `;
+    errorDiv.innerHTML = `
+        <h2 style="margin: 0 0 12px 0; color: #b3261e;">${title}</h2>
+        <p style="margin: 0; color: #666;">${message}</p>
+    `;
+    document.body.appendChild(errorDiv);
+}
+
+/* ============================================================================
+   Event Listeners
+   ============================================================================ */
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize Supabase
+    if (!initSupabase()) {
+        return;
+    }
+    
+    // Attach event listeners
+    searchButton.addEventListener('click', handleSearch);
+    phoneInput.addEventListener('keydown', handlePhoneKeydown);
+    backButton.addEventListener('click', handleBackToSearch);
+    
+    // Check for URL parameters
+    checkUrlParams();
 });
 
-// ============================================================
-// DATABASE LOADERS (SECURE SUPABASE RPC CALLS)
-// ============================================================
-
-async function loadStudentsByPhone(phone) {
-  try {
-    const { data, error } = await supabaseClient
-      .rpc('get_students_by_phone', { search_phone: phone });
-
-    if (error) throw error;
-    
-    ALL_STUDENTS = (data || []).map(row => ({
-      center:        row.center,
-      studentId:     row.student_id,
-      studentName:   row.student_name,
-      phone:         row.phone_number,
-      parentsName:   row.parents_name,
-      retentionX:    row.retention_x,
-      expiryDateRaw: row.expiry_date_raw,
-      expiryDate:    formatDisplayDate(row.expiry_date_raw),
-      sarName:       row.sar_name,
-      waLink:        row.wa_link
-    }));
-    DATA_READY = true;
-  } catch (e) {
-    DATA_ERROR = "Data membership belum bisa dimuat. Silakan coba beberapa saat lagi atau hubungi " + SUPPORT_LABEL + " untuk bantuan.";
-    console.error(e);
-  }
-}
-
-async function loadStudentById(studentId) {
-  try {
-    const { data, error } = await supabaseClient
-      .rpc('get_student_by_id', { search_id: studentId });
-
-    if (error) throw error;
-    
-    ALL_STUDENTS = (data || []).map(row => ({
-      center:        row.center,
-      studentId:     row.student_id,
-      studentName:   row.student_name,
-      phone:         row.phone_number,
-      parentsName:   row.parents_name,
-      retentionX:    row.retention_x,
-      expiryDateRaw: row.expiry_date_raw,
-      expiryDate:    formatDisplayDate(row.expiry_date_raw),
-      sarName:       row.sar_name,
-      waLink:        row.wa_link
-    }));
-    DATA_READY = true;
-  } catch (e) {
-    DATA_ERROR = "Data membership belum bisa dimuat. Silakan coba beberapa saat lagi atau hubungi " + SUPPORT_LABEL + " untuk bantuan.";
-    console.error(e);
-  }
-}
-
-async function fetchAttendanceForStudent(studentId) {
-  try {
-    const { data, error } = await supabaseClient
-      .rpc('get_attendance_by_student_id', { search_id: studentId });
-
-    if (error) throw error;
-    
-    ALL_ATTENDANCE = (data || []).map(row => ({
-      studentId:     row.student_id,
-      studentName:   row.student_name,
-      center:        row.center,
-      rawDate:       row.raw_date,
-      dateStr:       row.date_str || formatDisplayDate(row.raw_date),
-      class_:        row.class_,
-      status:        row.status,
-      makeupReason:  row.makeup_reason,
-      type:          row.type,
-      isOldClass:    Boolean(row.is_old_class),
-      previousClass: row.previous_class
-    }));
-  } catch (e) {
-    console.error("Failed to fetch attendance for student", studentId, e);
-  }
-}
-
-// ============================================================
-// BRAND LOGO
-// ============================================================
-
-function renderBrandLogo(size) {
-  const imgClass = size === "small" ? "logo-img small" : "logo-img";
-  return `<div class="logo-wrap">
-    <img src="${LOGO_URL}" class="${imgClass}" alt="Sparks Sports Academy"
-      onerror="this.style.display='none';this.nextElementSibling.style.display='block';"/>
-    <div class="logo-fallback ${size === "small" ? "white" : ""}" style="display:none;">
-      Sparks <span class="star">★</span>
-    </div>
-  </div>`;
-}
-
-// ============================================================
-// LP1: LANDING PAGE
-// ============================================================
-
-function renderLandingPage() {
-  document.body.className = "center-page";
-  app.innerHTML = `
-    <div class="card">
-      ${renderBrandLogo()}
-      <div class="divider"></div>
-      <p class="headline">Cek Status Membership Anak</p>
-      <p class="sub">Masukkan nomor WhatsApp orang tua yang terdaftar untuk melihat status membership Sparks.</p>
-      <label for="phone">Nomor WhatsApp</label>
-      <div class="input-row has-icon">
-        <div class="field-icon">${ICON_PHONE}</div>
-        <div class="prefix">+62</div>
-        <input type="tel" id="phone" placeholder="8111000549" inputmode="numeric" autocomplete="tel" maxlength="16"/>
-      </div>
-      <p class="hint">Tanpa angka 0 di depan. Contoh: 8111000549</p>
-      <button id="btn" onclick="goToDashboard()">Cek Status Membership →</button>
-      <p class="small-note">Butuh bantuan? Hubungi <a href="${SUPPORT_WA}" target="_blank" style="color:var(--green);font-weight:700;">${SUPPORT_LABEL}</a> untuk pengecekan data membership.</p>
-    </div>
-  `;
-  const inp = document.getElementById("phone");
-  inp.addEventListener("input", function () { this.value = this.value.replace(/[^0-9]/g, ""); });
-  inp.addEventListener("keydown", function (e) { if (e.key === "Enter") goToDashboard(); });
-}
-
-// ============================================================
-// LOADING / ERROR / NOT FOUND
-// ============================================================
-
-function renderLoadingPage(title, subtitle) {
-  document.body.className = "center-page";
-  app.innerHTML = `
-    <div class="card">
-      <div class="search-visual">${ICON_SEARCH}</div>
-      ${renderBrandLogo()}
-      <div class="divider"></div>
-      <p class="headline loading-dots">${escapeHtml(title)}</p>
-      <p class="sub">${escapeHtml(subtitle)}</p>
-    </div>
-  `;
-}
-
-function renderNotFoundPage(phone) {
-  document.body.className = "center-page";
-  app.innerHTML = `
-    <div class="card">
-      <div class="search-visual">${ICON_SEARCH}</div>
-      <h2 class="headline">Nomor Tidak Ditemukan</h2>
-      <p class="error-text">Kami belum menemukan data membership untuk nomor:</p>
-      <div class="phone-box">+${escapeHtml(phone)}</div>
-      <p class="error-text">Coba cek kembali angka yang dimasukkan. Jika nomor sudah benar tetapi data tetap tidak muncul, silakan hubungi Student Advisor Retention center kamu untuk pengecekan data.</p>
-      <br>
-      <a class="wa-help-btn" href="${SUPPORT_WA}" target="_blank">${ICON_WA} Hubungi ${SUPPORT_LABEL}</a>
-      <br><br>
-      <a class="link-button" onclick="backToHome()">← Coba Nomor Lain</a>
-    </div>
-  `;
-}
-
-function renderErrorPage(message) {
-  document.body.className = "center-page";
-  app.innerHTML = `
-    <div class="card">
-      <div class="icon warning">⚠️</div>
-      <h2 class="headline">Data Belum Bisa Dimuat</h2>
-      <p class="error-text">${escapeHtml(message)}</p>
-      <p class="error-text">Silakan muat ulang halaman ini. Jika masih belum bisa, hubungi tim Sparks untuk pengecekan database.</p>
-      <br><br>
-      <a class="link-button" onclick="backToHome()">← Kembali</a>
-    </div>
-  `;
-}
-
-// ============================================================
-// LP2: DASHBOARD
-// ============================================================
-
-function renderDashboardPage(students) {
-  document.body.className = "dashboard-page";
-  const phone        = new URLSearchParams(window.location.search).get("phone") || "";
-  const parentsName  = formatGreetingParentName(students[0]?.parentsName || "");
-  const greeting     = parentsName ? `Halo, ${escapeHtml(parentsName)}!` : "Halo!";
-  const multiNote    = students.length > 1
-    ? `<div class="multi-note">👤 ${students.length} anak terdaftar dengan nomor ini.</div>` : "";
-
-  app.innerHTML = `
-    <div class="topbar">
-      <div class="topbar-logo">
-        <div class="topbar-logo-inner">
-          <img src="${LOGO_URL}" class="logo-img small" alt="Sparks Sports Academy"
-            onerror="this.style.display='none';this.nextElementSibling.style.display='block';"/>
-          <div class="logo-fallback white" style="display:none;">Sparks <span class="star">★</span> Sports Academy</div>
-        </div>
-      </div>
-    </div>
-    <div class="wrap">
-      <div class="greeting-card">
-        <div class="greeting-text">${greeting}</div>
-        <div class="greeting-sub">Yuk cek status membership si kecil di Sparks.</div>
-      </div>
-      ${multiNote}
-      ${students.map(s => studentCard(s, phone)).join("")}
-      <a class="back-link" onclick="backToHome()">← Cek nomor lain</a>
-    </div>
-  `;
-}
-
-function studentCard(student, phone) {
-  const centerText = student.center;
-  const sid        = encodeURIComponent(student.studentId);
-  const ph         = encodeURIComponent(phone);
-  return `
-    <div class="student-card">
-      <div class="card-top">
-        <div class="avatar">${getInitials(student.studentName)}</div>
-        <div class="card-info">
-          <div class="student-name">${escapeHtml(student.studentName || "Nama belum tersedia")}</div>
-          <div class="student-id">${escapeHtml(student.studentId)}</div>
-          <div><span class="center-badge">${escapeHtml(centerText)}</span></div>
-        </div>
-      </div>
-      ${createExpiryBanner(student.expiryDate)}
-      <a class="detail-btn" href="?phone=${ph}&sid=${sid}">Lihat Detail Attendance →</a>
-    </div>
-  `;
-}
-
-// ============================================================
-// LP3: STUDENT DETAIL
-// ============================================================
-
-function renderDetailPage(student, attendance, waLink, sarName, phone) {
-  document.body.className = "dashboard-page";
-  const centerText = student.center;
-  const ph         = encodeURIComponent(phone || "");
-  const waTarget   = waLink || SUPPORT_WA;
-  const waLabel    = waLink ? "Hubungi Student Advisor" : `Hubungi ${SUPPORT_LABEL}`;
-
-  const classMap = {};
-  const classOldFlag = {};
-  attendance.forEach(r => {
-    const isMakeUp = r.type && r.type.toLowerCase() === "make up";
-    let tabLabel = isMakeUp ? (r.previousClass ? getClassLabel(r.previousClass) : null) : getClassLabel(r.class_);
-    
-    if (tabLabel) {
-      if (!classMap[tabLabel]) { classMap[tabLabel] = []; classOldFlag[tabLabel] = true; }
-      classMap[tabLabel].push(r);
-      if (!r.isOldClass) classOldFlag[tabLabel] = false;
-    }
-  });
-  const classKeys = Object.keys(classMap);
-  const makeupAll = attendance.filter(r => r.type && r.type.toLowerCase() === "make up");
-  const tabsHtml  = [
-    `<button class="class-tab active" data-key="__all__">Semua</button>`,
-    ...classKeys.map(k => {
-      const isOld = classOldFlag[k];
-      return `<button class="class-tab${isOld ? ' class-tab--old' : ''}" data-key="${escapeHtml(k)}" data-old="${isOld}">${escapeHtml(k)}${isOld ? ' <span class="old-badge">Kelas Lama</span>' : ''}</button>`;
-    }),
-    makeupAll.length ? `<button class="class-tab class-tab--makeup" data-key="__makeup__">Make Up</button>` : ""
-  ].join("");
-
-  app.innerHTML = `
-    <div class="topbar topbar-detail">
-      <a class="topbar-back" href="?phone=${ph}">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><polyline points="15 18 9 12 15 6"/></svg>
-      </a>
-      <div class="topbar-logo"><div class="topbar-logo-inner">
-        <img src="${LOGO_URL}" class="logo-img small" alt="Sparks Sports Academy"
-          onerror="this.style.display='none';this.nextElementSibling.style.display='block';"/>
-        <div class="logo-fallback white" style="display:none;">Sparks <span class="star">★</span></div>
-      </div></div>
-    </div>
-    <div class="wrap">
-      <div class="detail-hero">
-        <div class="card-top">
-          <div class="avatar">${getInitials(student.studentName)}</div>
-          <div class="card-info">
-            <div class="student-name">${escapeHtml(student.studentName)}</div>
-            <div class="student-id">${escapeHtml(student.studentId)}</div>
-            <div><span class="center-badge">${escapeHtml(centerText)}</span></div>
-          </div>
-        </div>
-        ${createExpiryBanner(student.expiryDate)}
-      </div>
-
-      <div class="term-label">
-        <span class="term-badge">Summer Term 2026</span>
-      </div>
-
-      <div class="class-tabs-wrap">${tabsHtml}</div>
-      <div class="metrics-row" id="lp3-metrics"></div>
-
-      <div class="att-card">
-        <div class="att-header">
-          <div class="att-title" id="lp3-att-title">Riwayat Kehadiran</div>
-        </div>
-        <div class="att-legend">
-          <span class="leg-item"><span class="att-dot-inline dot-present"></span>Hadir</span>
-          <span class="leg-item"><span class="att-dot-inline dot-makeup"></span>Make up</span>
-          <span class="leg-item"><span class="att-dot-inline dot-absent"></span>Absen</span>
-          <span class="leg-item"><span class="att-dot-inline dot-leave"></span>Izin</span>
-        </div>
-        <div class="att-table-wrap">
-          <table class="att-table">
-            <thead><tr><th>Tanggal</th><th>Kelas</th><th>Status</th></tr></thead>
-            <tbody id="lp3-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <a class="wa-help-btn wa-help-btn--full" href="${waTarget}" target="_blank">${ICON_WA} ${waLabel}</a>
-      <a class="back-link" href="?phone=${ph}">← Kembali ke daftar anak</a>
-    </div>
-  `;
-
-  window._lp3All          = attendance;
-  window._lp3MakeupAll    = makeupAll;
-  window._lp3ClassMap     = classMap;
-  window._lp3ClassOldFlag = classOldFlag;
-
-  setTimeout(function() {
-    document.querySelectorAll(".class-tab").forEach(function(btn) {
-      btn.addEventListener("click", function () {
-        document.querySelectorAll(".class-tab").forEach(function(t) { t.classList.remove("active"); });
-        this.classList.add("active");
-        lp3Render(this.getAttribute("data-key"));
-      });
-    });
-    lp3Render("__all__");
-  }, 0);
-}
-
-function lp3Render(key) {
-  const all          = window._lp3All || [];
-  const makeupAll    = window._lp3MakeupAll || [];
-  const classMap     = window._lp3ClassMap || {};
-  const classOldFlag = window._lp3ClassOldFlag || {};
-
-  const isMakeUpTab = key === "__makeup__";
-  let rows          = isMakeUpTab ? makeupAll : (key === "__all__" ? all : (classMap[key] || []));
-  const isOldTab    = !isMakeUpTab && key !== "__all__" && classOldFlag[key];
-
-  const metricsEl = document.getElementById("lp3-metrics");
-  const titleEl   = document.getElementById("lp3-att-title");
-  const tbody     = document.getElementById("lp3-tbody");
-  if (!tbody) return;
-
-  if (isMakeUpTab) {
-    const countMU = makeupAll.length;
-    if (metricsEl) metricsEl.innerHTML = `
-      <div class="metric-chips">
-        <div class="metric-chip metric-chip--makeup">
-          <div class="mc-icon mc-purple">↺</div>
-          <div class="mc-num purple">${countMU}</div>
-          <div class="mc-lbl">Total Make Up</div>
-        </div>
-      </div>`;
-    if (titleEl) titleEl.textContent = "Riwayat Make Up";
-
-    if (!makeupAll.length) {
-      tbody.innerHTML = `<tr><td colspan="3" class="att-empty">Belum ada data make up.</td></tr>`;
-      return;
-    }
-    tbody.innerHTML = makeupAll.map(r => {
-      const cls            = simplifyClassName(r.class_);
-      const { badge, dot } = getStatusBadge(r.status);
-      const reasonTag      = r.makeupReason ? `<span class="reason-tag">${escapeHtml(r.makeupReason)}</span>` : "";
-      const prevTag        = r.previousClass ? `<span class="prev-class-tag">↩ ${escapeHtml(simplifyClassName(r.previousClass))}</span>` : "";
-      return `<tr>
-        <td><span class="att-dot-inline ${dot}"></span>${escapeHtml(r.dateStr || "-")}</td>
-        <td>${escapeHtml(cls)}${reasonTag}${prevTag}</td>
-        <td><span class="att-badge ${badge}">${escapeHtml(r.status)}</span></td>
-      </tr>`;
-    }).join("");
-    return;
-  }
-
-  const regularRows     = rows.filter(r => r.type === "Regular");
-  const makeupRows      = rows.filter(r => r.type === "Make Up");
-  const countHadir      = regularRows.filter(r => r.status.toLowerCase() === "present").length;
-  const countTidakHadir = regularRows.filter(r => {
-    const s = r.status.toLowerCase();
-    return s === "absent" || s === "leave" || s === "sakit" || s === "izin";
-  }).length;
-  const countMakeUp     = makeupRows.length;
-
-  const oldCls = isOldTab ? " metric-chip--old" : "";
-  if (metricsEl) metricsEl.innerHTML = `
-    <div class="metric-chips">
-      <div class="metric-chip${oldCls}">
-        <div class="mc-icon mc-green">✓</div>
-        <div class="mc-num green">${countHadir}</div>
-        <div class="mc-lbl">Hadir</div>
-      </div>
-      <div class="metric-chip${oldCls}">
-        <div class="mc-icon mc-red">✕</div>
-        <div class="mc-num red">${countTidakHadir}</div>
-        <div class="mc-lbl">Tidak Hadir</div>
-      </div>
-      <div class="metric-chip${oldCls}">
-        <div class="mc-icon mc-purple">↺</div>
-        <div class="mc-num purple">${countMakeUp}</div>
-        <div class="mc-lbl">Make Up</div>
-      </div>
-    </div>`;
-
-  if (titleEl) titleEl.textContent = key === "__all__" ? "Riwayat Kehadiran" : "Riwayat Kehadiran · " + key;
-
-  if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="3" class="att-empty">Belum ada data attendance untuk periode ini.</td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = rows.map(r => {
-    const cls            = simplifyClassName(r.class_);
-    const { badge, dot } = getStatusBadge(r.status);
-    const reasonTag      = r.makeupReason && r.makeupReason !== "Regular Class" ? `<span class="reason-tag">${escapeHtml(r.makeupReason)}</span>` : "";
-    return `<tr>
-      <td><span class="att-dot-inline ${dot}"></span>${escapeHtml(r.dateStr || "-")}</td>
-      <td>${escapeHtml(cls)}${reasonTag}</td>
-      <td><span class="att-badge ${badge}">${escapeHtml(r.status)}</span></td>
-    </tr>`;
-  }).join("");
-}
-
-// ============================================================
-// EXPIRY BANNER
-// ============================================================
-
-function createExpiryBanner(expiryStr) {
-  const date = parseExpiryDate(expiryStr);
-  if (!date || date.getFullYear() < 2020) {
-    return `<div class="expiry-box expiry-unknown">
-      <div class="ex-label">Membership Berakhir</div>
-      <div class="ex-date">Belum tersedia</div>
-      <div class="ex-msg">Status membership belum tersedia. Yuk hubungi Student Advisor Retention untuk bantu cek ya.</div>
-    </div>`;
-  }
-  const days = daysUntil(date);
-  let cls, daysText, msg;
-  if (days < 0) {
-    cls = "expiry-expired"; daysText = `${Math.abs(days)} hari yang lalu`;
-    msg = "Yah, membership si kecil sudah habis. Yuk perpanjang sekarang supaya tetap bisa lanjut seru-seruan di Sparks!";
-  } else if (days === 0) {
-    cls = "expiry-urgent"; daysText = "Berakhir hari ini";
-    msg = "Duh, membership si kecil berakhir hari ini nih. Yuk segera perpanjang supaya tetap aktif!";
-  } else if (days <= 14) {
-    cls = "expiry-urgent"; daysText = `${days} hari lagi`;
-    msg = "Duh, membership si kecil sudah mendekati masa berakhir nih. Yuk segera perpanjang ya!";
-  } else if (days <= 30) {
-    cls = "expiry-soon"; daysText = `${days} hari lagi`;
-    msg = "Duh, membership si kecil sudah mendekati waktu expired. Yuk mulai perpanjang dari sekarang ya.";
-  } else {
-    cls = "expiry-active"; daysText = `${days} hari lagi`;
-    msg = "Yeay, membership si kecil masih aktif! Tinggal lanjut latihan dan have fun bareng Sparks!";
-  }
-  return `<div class="expiry-box ${cls}">
-    <div class="ex-label">Membership Berakhir</div>
-    <div class="ex-date">${escapeHtml(formatDisplayDate(expiryStr))}</div>
-    <div class="ex-days">${escapeHtml(daysText)}</div>
-    <div class="ex-msg">${escapeHtml(msg)}</div>
-  </div>`;
-}
-
-// ============================================================
-// HELPERS
-// ============================================================
-
-function getClassLabel(raw) {
-  if (!raw) return "Kelas";
-  const parts = raw.split("|").map(p => p.trim());
-  return parts.length >= 3 ? parts[2] : raw;
-}
-
-function simplifyClassName(raw) {
-  if (!raw) return "";
-  const parts = raw.split("|").map(p => p.trim());
-  if (parts.length >= 5) return `${parts[2]} · ${parts[3]} ${parts[4]}`;
-  return raw;
-}
-
-function getStatusBadge(status) {
-  const s = status ? status.toLowerCase() : "";
-  if (s === "present")  return { badge: "badge-present", dot: "dot-present" };
-  if (s === "make up")  return { badge: "badge-makeup",  dot: "dot-makeup"  };
-  if (s === "absent")   return { badge: "badge-absent",  dot: "dot-absent"  };
-  if (s === "leave" || s === "izin" || s === "sakit") return { badge: "badge-absent", dot: "dot-absent" };
-  return { badge: "badge-present", dot: "dot-present" };
-}
-
-function formatGreetingParentName(name) {
-  if (!name) return "";
-  const lower = name.toLowerCase();
-  if (["mom","dad","mama","papa","bunda","ayah","ibu","mr","mrs"].some(p => lower.startsWith(p))) return name;
-  return `Mom/Dad ${name}`;
-}
-
-function parseExpiryDate(value) {
-  if (!value || value === "-" || value.toLowerCase() === "not yet renewal" || value.toLowerCase() === "xxxxx" || value.startsWith("#")) return null;
-  const fb = new Date(value);
-  return isNaN(fb.getTime()) ? null : fb;
-}
-
-function formatDisplayDate(value) {
-  const date = parseExpiryDate(value);
-  if (!date) return value || "";
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
-}
-
-function daysUntil(date) {
-  const today = new Date(); today.setHours(0,0,0,0);
-  const t     = new Date(date); t.setHours(0,0,0,0);
-  return Math.round((t - today) / 86400000);
-}
-
-function getInitials(name) {
-  if (!name) return "?";
-  const clean = name.replace(/\s*\(.*\)\s*$/, "").trim();
-  const parts = clean.split(/\s+/).filter(Boolean);
-  return parts.length === 1 ? parts[0][0].toUpperCase() : (parts[0][0] + parts[1][0]).toUpperCase();
-}
-
-function escapeHtml(value) {
-  return String(value || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-}
-
-// ============================================================
-// ACTIONS
-// ============================================================
-
-function goToDashboard() {
-  const input = document.getElementById("phone");
-  const btn   = document.getElementById("btn");
-  let phone = input.value.trim().replace(/[^0-9]/g, "");
-  if (!phone)           { alert("Masukkan nomor WhatsApp terlebih dahulu."); return; }
-  if (phone.length < 8) { alert("Nomor terlalu pendek"); return; }
-  
-  if (phone.startsWith("0")) phone = "62" + phone.slice(1);
-  else if (phone.startsWith("8")) phone = "62" + phone;
-
-  btn.textContent = "Mencari...";
-  btn.disabled = true;
-  window.location.href = `${window.location.pathname}?phone=${encodeURIComponent(phone)}`;
-}
-
-function backToHome() { window.location.href = window.location.pathname; }
+// Handle browser back button
+window.addEventListener('popstate', () => {
+    checkUrlParams();
+});
